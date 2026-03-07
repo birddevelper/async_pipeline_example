@@ -42,6 +42,14 @@ flowchart LR
     Notify -- "WebSocket message" --> Browser
 ```
 
+# Usage
+
+start docker compose:
+
+```bash
+docker compose up
+```
+Then open `http://localhost:3000` in your browser and click the "Create Job" button to see the flow in action.
 
 # Components
 
