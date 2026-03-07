@@ -7,7 +7,7 @@ A minimal **background asynchronous processing pipeline** built with:
 * WebSockets
 * Background workers
 
-This project demonstrates a **common architecture pattern used in modern backend systems** where long-running tasks must be processed asynchronously while the user receives updates in real time.
+This project demonstrates a **common architecture pattern used in modern backend systems** where long-running tasks must be processed asynchronously while the user receives updates in real time. The user immediately receives a **job ID** and is later notified when the job finishes.
 
 # High-Level Flow
 
@@ -23,68 +23,25 @@ flowchart LR
     Queue["RabbitMQ
     Message Broker"]
 
-    Worker["Worker Service
+    Worker1["Worker 1 Service
+    Background Processing"]
+
+    Worker2["Worker 2 Service
     Background Processing"]
 
     Notify["Notification Service
     WebSocket Server"]
 
     Browser -- "HTTP POST /jobs" --> API
-    API -- "Publish job" --> Queue
-    Queue -- "Consume job" --> Worker
-    Worker -- "Publish job_completed" --> Queue
+    API -- "Publish stage1_jobs" --> Queue
+    Queue -- "Consume stage1_jobs" --> Worker1
+    Worker1 -- "Publish stage2_jobs" --> Queue
+    Queue -- "Consume Consume" --> Worker2
+    Worker2 -- "Publish job_completed" --> Queue
     Queue -- "Completion event" --> Notify
     Notify -- "WebSocket message" --> Browser
 ```
 
-The user immediately receives a **job ID** and is later notified when the job finishes.
-
----
-
-# Architecture Diagram
-
-```
-                 +------------------+
-                 |     Browser      |
-                 |                  |
-                 |  WebSocket       |
-                 |  connection      |
-                 +--------+---------+
-                          |
-                          |
-                          v
-                 +------------------+
-                 | Notification     |
-                 | Service          |
-                 | (WebSocket)      |
-                 +--------+---------+
-                          ^
-                          |
-                          | job_completed event
-                          |
-                 +--------+---------+
-                 |     RabbitMQ     |
-                 |     Message      |
-                 |     Broker       |
-                 +--------+---------+
-                          ^
-                          |
-                          | new job
-                          |
-                 +--------+---------+
-                 | API Service      |
-                 | (FastAPI)        |
-                 +--------+---------+
-                          |
-                          |
-                          v
-                 +------------------+
-                 | Worker Service   |
-                 | Background Jobs  |
-                 +------------------+
-```
-
----
 
 # Components
 
@@ -244,16 +201,25 @@ User clicks "Create Job"
 POST /jobs
         │
         ▼
-API publishes job → RabbitMQ
+API publishes stage1_jobs → RabbitMQ
         │
         ▼
-Worker receives job
+Worker1 receives job from stage1_jobs
         │
         ▼
-Worker finishes task
+Worker1 finishes task
         │
         ▼
-Worker publishes job_completed
+Worker1 publishes stage2_jobs → RabbitMQ
+        │
+        ▼
+Worker2 receives job from stage2_jobs
+        │
+        ▼
+Worker2 finishes task
+        │
+        ▼
+Worker2 publishes job_completed
         │
         ▼
 Notification service receives event
