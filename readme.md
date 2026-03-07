@@ -11,7 +11,7 @@ This project demonstrates a **common architecture pattern used in modern backend
 
 # High-Level Flow
 
-```
+```mermaid
 flowchart LR
 
     Browser["Browser Client"]
