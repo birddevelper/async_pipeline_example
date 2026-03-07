@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>Async Job Pipeline Demo</h2>
+<button onclick="createJob()">Create Job</button>
+<pre id="output"></pre>
+
+<script>
+function getClientId() {
+    let id = localStorage.getItem("client_id");
+    if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem("client_id", id);
+    }
+    return id;
+}
+
+const clientId = getClientId();
+
+let socket = new WebSocket(`ws://localhost:8001/ws/${clientId}`);
+
+socket.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    document.getElementById("output").innerText +=
+        "\nWebSocket: Job " + data.job_id + " completed!";
+};
+
+async function createJob() {
+    const res = await fetch("http://localhost:8000/jobs", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ client_id: clientId })
+    });
+
+    const data = await res.json();
+
+    document.getElementById("output").innerText =
+        "Job " + data.job_id + " submitted...";
+}
+</script>
+</body>
+</html>
