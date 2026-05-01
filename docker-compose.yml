@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "user" ]
+      test: [ "CMD", "pg_isready", "-U", "user" , "-d", "jobsdb" ]
       interval: 5s
       retries: 5
 
@@ -54,7 +54,8 @@ services:
   notification:
     build: ./notification
     depends_on:
-      - rabbitmq
+        rabbitmq:
+            condition: service_healthy
     ports:
       - "8001:8001"
     volumes:

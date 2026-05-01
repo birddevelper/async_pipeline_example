@@ -57,8 +57,8 @@ def rabbit_listener():
 
     connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
     channel = connection.channel()
-    channel.queue_declare(queue="job_completed", durable=True)
-    channel.basic_consume(queue="job_completed", on_message_callback=callback)
+    channel.queue_declare(queue="notification", durable=True)
+    channel.basic_consume(queue="notification", on_message_callback=callback)
     channel.start_consuming()
 
 

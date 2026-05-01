@@ -38,7 +38,7 @@ def callback(ch, method, properties, body):
 
         ch.basic_publish(
             exchange="",
-            routing_key="job_completed",
+            routing_key="notification",
             body=json.dumps({"job_id": job_id, "client_id": client_id}),
             properties=pika.BasicProperties(delivery_mode=2),
         )
@@ -52,7 +52,7 @@ def callback(ch, method, properties, body):
 connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
 channel = connection.channel()
 channel.queue_declare(queue="stage2_jobs", durable=True)
-channel.queue_declare(queue="job_completed", durable=True)
+channel.queue_declare(queue="notification", durable=True)
 channel.basic_qos(prefetch_count=1)
 channel.basic_consume(queue="stage2_jobs", on_message_callback=callback)
 
