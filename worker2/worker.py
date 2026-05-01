@@ -16,6 +16,19 @@ def stage2_process(stage1_result):
     return f"FINAL({stage1_result})"
 
 
+def publish(queue_name, payload):
+    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue_name, durable=True)
+    channel.basic_publish(
+        exchange="",
+        routing_key=queue_name,
+        body=json.dumps(payload),
+        properties=pika.BasicProperties(delivery_mode=2),
+    )
+    connection.close()
+
+
 def callback(ch, method, properties, body):
     data = json.loads(body)
     job_id = data["job_id"]
@@ -36,11 +49,14 @@ def callback(ch, method, properties, body):
         conn.commit()
         conn.close()
 
-        ch.basic_publish(
-            exchange="",
-            routing_key="notification",
-            body=json.dumps({"job_id": job_id, "client_id": client_id}),
-            properties=pika.BasicProperties(delivery_mode=2),
+        publish(
+            "notification",
+            {
+                "job_id": job_id,
+                "client_id": client_id,
+                "status": "completed",
+                "result": final_result,
+            },
         )
 
         ch.basic_ack(delivery_tag=method.delivery_tag)

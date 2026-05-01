@@ -12,6 +12,8 @@ class JobCreate(BaseModel):
 
 app = FastAPI()
 
+NOTIFICATION_QUEUE = "notification"
+
 origins = ["*"]
 
 app.add_middleware(
@@ -29,19 +31,30 @@ def get_connection():
     )
 
 
-def publish_stage1(job_id, client_id):
+def publish(queue_name, payload):
     connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
     channel = connection.channel()
-    channel.queue_declare(queue="stage1_jobs", durable=True)
+    channel.queue_declare(queue=queue_name, durable=True)
 
     channel.basic_publish(
         exchange="",
-        routing_key="stage1_jobs",
-        body=json.dumps({"job_id": job_id, "client_id": client_id}),
+        routing_key=queue_name,
+        body=json.dumps(payload),
         properties=pika.BasicProperties(delivery_mode=2),
     )
 
     connection.close()
+
+
+def publish_stage1(job_id, client_id):
+    publish("stage1_jobs", {"job_id": job_id, "client_id": client_id})
+
+
+def publish_notification(job_id, client_id, status, result=None):
+    payload = {"job_id": job_id, "client_id": client_id, "status": status}
+    if result is not None:
+        payload["result"] = result
+    publish(NOTIFICATION_QUEUE, payload)
 
 
 @app.on_event("startup")
@@ -72,6 +85,7 @@ def create_job(job: JobCreate):
     conn.close()
 
     publish_stage1(job_id, job.client_id)
+    publish_notification(job_id, job.client_id, "created")
     return {"job_id": job_id}
 
 

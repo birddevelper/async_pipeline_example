@@ -1,11 +1,231 @@
 <!DOCTYPE html>
 <html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Async Job Pipeline Demo</title>
+<style>
+    :root {
+        --bg: #f3efe6;
+        --panel: #fffaf0;
+        --panel-border: #d7c9b0;
+        --text: #1f2933;
+        --muted: #5f6c7b;
+        --accent: #cc5f2d;
+        --pending: #e8dcc7;
+        --current: #f2b544;
+        --done: #5f9c6f;
+        --shadow: rgba(82, 54, 24, 0.12);
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+            radial-gradient(circle at top left, rgba(255, 255, 255, 0.75), transparent 32%),
+            linear-gradient(160deg, #f8f4ea 0%, #efe5cf 48%, #e6d7bb 100%);
+    }
+
+    .page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+    }
+
+    .hero {
+        background: rgba(255, 250, 240, 0.92);
+        border: 1px solid var(--panel-border);
+        border-radius: 24px;
+        padding: 28px;
+        box-shadow: 0 20px 40px var(--shadow);
+    }
+
+    h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        letter-spacing: 0.02em;
+    }
+
+    p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+        max-width: 60ch;
+    }
+
+    .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-top: 24px;
+    }
+
+    button {
+        border: none;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        padding: 12px 22px;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 10px 20px rgba(204, 95, 45, 0.25);
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 24px rgba(204, 95, 45, 0.3);
+    }
+
+    .status-chip {
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(95, 156, 111, 0.12);
+        color: var(--text);
+        font-weight: 700;
+    }
+
+    .status-chip.disconnected {
+        background: rgba(204, 95, 45, 0.15);
+    }
+
+    .jobs {
+        display: grid;
+        gap: 18px;
+        margin-top: 28px;
+    }
+
+    .job-card,
+    .empty-state {
+        background: rgba(255, 250, 240, 0.92);
+        border: 1px solid var(--panel-border);
+        border-radius: 22px;
+        padding: 20px;
+        box-shadow: 0 14px 28px var(--shadow);
+    }
+
+    .job-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 18px;
+    }
+
+    .job-title {
+        margin: 0;
+        font-size: 1.1rem;
+    }
+
+    .job-meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+    }
+
+    .steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .step {
+        padding: 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(31, 41, 51, 0.08);
+        min-height: 112px;
+        transition: transform 0.18s ease, background-color 0.18s ease;
+    }
+
+    .step.current {
+        transform: translateY(-2px);
+    }
+
+    .step.pending {
+        background: var(--pending);
+    }
+
+    .step.current {
+        background: var(--current);
+    }
+
+    .step.done {
+        background: var(--done);
+        color: white;
+    }
+
+    .step-label {
+        margin: 0 0 8px;
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .step-status {
+        margin: 0 0 10px;
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+
+    .step-detail {
+        margin: 0;
+        line-height: 1.5;
+        opacity: 0.9;
+    }
+
+    .result {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(31, 41, 51, 0.1);
+        color: var(--muted);
+        word-break: break-word;
+    }
+
+    @media (max-width: 760px) {
+        .steps {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+</head>
 <body>
-<h2>Async Job Pipeline Demo</h2>
-<button onclick="createJob()">Create Job</button>
-<pre id="output"></pre>
+<div class="page">
+    <section class="hero">
+        <h1>Async Job Pipeline</h1>
+        <p>
+            Create a job and watch each pipeline step move across the system.
+            Each box changes color as the API, Worker 1, and Worker 2 finish their part.
+        </p>
+        <div class="toolbar">
+            <button onclick="createJob()">Create Job</button>
+            <div id="socket-status" class="status-chip">WebSocket connecting...</div>
+        </div>
+    </section>
+
+    <section id="jobs" class="jobs">
+        <div class="empty-state">No jobs yet. Create one to see the pipeline update live.</div>
+    </section>
+</div>
 
 <script>
+const STATUS_ORDER = {
+    submitted: 0,
+    created: 1,
+    stage1_completed: 2,
+    completed: 3
+};
+
+const jobs = new Map();
+const RECONNECT_DELAY_MS = 2000;
+
 function getClientId() {
     let id = localStorage.getItem("client_id");
     if (!id) {
@@ -16,14 +236,64 @@ function getClientId() {
 }
 
 const clientId = getClientId();
+const jobsContainer = document.getElementById("jobs");
+const socketStatus = document.getElementById("socket-status");
 
-let socket = new WebSocket(`ws://localhost:8001/ws/${clientId}`);
+let socket;
+let reconnectTimer;
 
-socket.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    document.getElementById("output").innerText +=
-        "\nWebSocket: Job " + data.job_id + " completed!";
-};
+function scheduleReconnect() {
+    if (reconnectTimer) {
+        return;
+    }
+
+    socketStatus.classList.add("disconnected");
+
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectWebSocket();
+    }, RECONNECT_DELAY_MS);
+}
+
+function connectWebSocket() {
+    socketStatus.classList.add("disconnected");
+
+    socket = new WebSocket(`ws://localhost:8001/ws/${clientId}`);
+
+    socket.onopen = function() {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+
+        socketStatus.textContent = "WebSocket connected";
+        socketStatus.classList.remove("disconnected");
+    };
+
+    socket.onclose = function() {
+        socketStatus.textContent = "WebSocket disconnected"
+        scheduleReconnect();
+    };
+
+    socket.onerror = function() {
+        socketStatus.textContent = "WebSocket error";
+        socketStatus.classList.add("disconnected");
+        socket.close();
+    };
+
+    socket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        const existing = jobs.get(data.job_id) || { job_id: data.job_id };
+        jobs.set(data.job_id, {
+            ...existing,
+            ...data,
+            updated_at: new Date().toLocaleTimeString()
+        });
+        renderJobs();
+    };
+}
+
+connectWebSocket();
 
 async function createJob() {
     const res = await fetch("http://localhost:8000/jobs", {
@@ -35,9 +305,86 @@ async function createJob() {
     });
 
     const data = await res.json();
+    jobs.set(data.job_id, {
+        job_id: data.job_id,
+        status: "created",
+        updated_at: new Date().toLocaleTimeString()
+    });
+    renderJobs();
+}
 
-    document.getElementById("output").innerText =
-        "Job " + data.job_id + " submitted...";
+function getVisualState(jobStatus, stepIndex) {
+    const progress = STATUS_ORDER[jobStatus] ?? 0;
+
+    if (progress >= 3) {
+        return "done";
+    }
+
+    if (stepIndex <= progress) {
+        return "done";
+    }
+
+    if (stepIndex === progress + 1) {
+        return "current";
+    }
+
+    return "pending";
+}
+
+function renderJobs() {
+    if (!jobs.size) {
+        jobsContainer.innerHTML = '<div class="empty-state">No jobs yet. Create one to see the pipeline update live.</div>';
+        return;
+    }
+
+    const sortedJobs = Array.from(jobs.values()).sort((a, b) => b.job_id - a.job_id);
+
+    jobsContainer.innerHTML = sortedJobs.map((job) => {
+        const steps = [
+            {
+                label: "API",
+                title: "Job Created",
+                detail: "The API stored the job and queued stage 1."
+            },
+            {
+                label: "Worker 1",
+                title: "Stage 1 Finished",
+                detail: "Worker 1 processed the first stage and queued Worker 2."
+            },
+            {
+                label: "Worker 2",
+                title: "Completed",
+                detail: job.result ? `Final result: ${job.result}` : "Worker 2 finalizes the pipeline output."
+            }
+        ];
+
+        const stepMarkup = steps.map((step, index) => {
+            const visualState = getVisualState(job.status, index + 1);
+            const statusText =
+                visualState === "done" ? "Done" :
+                visualState === "current" ? "In Progress" :
+                "Waiting";
+
+            return `
+                <div class="step ${visualState}">
+                    <p class="step-label">${step.label}</p>
+                    <p class="step-status">${step.title}</p>
+                    <p class="step-detail">${statusText}. ${step.detail}</p>
+                </div>
+            `;
+        }).join("");
+
+        return `
+            <article class="job-card">
+                <div class="job-header">
+                    <h2 class="job-title">Job #${job.job_id}</h2>
+                    <div class="job-meta">Latest status: ${job.status.replaceAll("_", " ")} at ${job.updated_at}</div>
+                </div>
+                <div class="steps">${stepMarkup}</div>
+                ${job.result ? `<div class="result">Result: ${job.result}</div>` : ""}
+            </article>
+        `;
+    }).join("");
 }
 </script>
 </body>

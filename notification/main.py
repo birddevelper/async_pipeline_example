@@ -2,14 +2,60 @@ import json
 import threading
 import pika
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI()
 
 clients: dict[str, WebSocket] = {}
 
 origins = ["*"]
+
+
+def rabbit_listener(loop):
+
+    def callback(ch, method, properties, body):
+        data = json.loads(body)
+        client_id = data["client_id"]
+        job_id = data["job_id"]
+        status = data["status"]
+        print(f"Received status '{status}' for job {job_id} from client {client_id}")
+
+        client = clients.get(client_id)
+
+        if client:
+            try:
+                future = asyncio.run_coroutine_threadsafe(
+                    client.send_text(json.dumps(data)),
+                    loop,
+                )
+                future.result(timeout=5)
+            except Exception:
+                pass
+
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+    channel = connection.channel()
+    channel.queue_declare(queue="notification", durable=True)
+    channel.basic_consume(queue="notification", on_message_callback=callback)
+    channel.start_consuming()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop = asyncio.get_running_loop()
+    app.state.loop = loop
+    listener_thread = getattr(app.state, "listener_thread", None)
+
+    if listener_thread is None or not listener_thread.is_alive():
+        listener_thread = threading.Thread(target=rabbit_listener, args=(loop,), daemon=True)
+        app.state.listener_thread = listener_thread
+        listener_thread.start()
+
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,33 +79,3 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except WebSocketDisconnect:
         clients.pop(client_id, None)
         print(f"Client disconnected: {client_id}")
-
-
-def rabbit_listener():
-
-    def callback(ch, method, properties, body):
-        data = json.loads(body)
-
-        client_id = data["client_id"]
-        job_id = data["job_id"]
-        print(f"Received completion for job {job_id} from client {client_id}")
-        message = json.dumps({"job_id": job_id, "status": "completed"})
-
-        client = clients.get(client_id)
-
-        if client:
-            try:
-                asyncio.run(client.send_text(message))
-            except Exception:
-                pass
-
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-
-    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
-    channel = connection.channel()
-    channel.queue_declare(queue="notification", durable=True)
-    channel.basic_consume(queue="notification", on_message_callback=callback)
-    channel.start_consuming()
-
-
-threading.Thread(target=rabbit_listener, daemon=True).start()

@@ -1,4 +1,3 @@
-from http import client
 import json
 import time
 import pika
@@ -15,6 +14,19 @@ def stage1_process(job_id):
     print(f"[Worker1] Processing stage 1 for {job_id}")
     time.sleep(3)
     return f"stage1_result_for_{job_id}"
+
+
+def publish(queue_name, payload):
+    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue_name, durable=True)
+    channel.basic_publish(
+        exchange="",
+        routing_key=queue_name,
+        body=json.dumps(payload),
+        properties=pika.BasicProperties(delivery_mode=2),
+    )
+    connection.close()
 
 
 def callback(ch, method, properties, body):
@@ -34,11 +46,10 @@ def callback(ch, method, properties, body):
         conn.commit()
         conn.close()
 
-        ch.basic_publish(
-            exchange="",
-            routing_key="stage2_jobs",
-            body=json.dumps({"job_id": job_id, "client_id": client_id}),
-            properties=pika.BasicProperties(delivery_mode=2),
+        publish("stage2_jobs", {"job_id": job_id, "client_id": client_id})
+        publish(
+            "notification",
+            {"job_id": job_id, "client_id": client_id, "status": "stage1_completed"},
         )
 
         ch.basic_ack(delivery_tag=method.delivery_tag)

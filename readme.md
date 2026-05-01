@@ -9,6 +9,10 @@ A minimal **background asynchronous processing pipeline** built with:
 
 This project demonstrates a **common architecture pattern used in modern backend systems** where long-running tasks must be processed asynchronously while the user receives updates in real time. The user immediately receives a **job ID** and is later notified when the job finishes.
 
+<p align="center">
+  <img src="async_jobs_pipeline.jpg" alt="Async jobs pipeline architecture" width="900">
+</p>
+
 # High-Level Flow
 
 ```mermaid
@@ -308,6 +312,5 @@ Services communicate via events instead of direct calls.
 
 WebSockets allow instant feedback to users.
 
-
-# The End
+---
 If you found this useful, please consider starring the repo on GitHub! ⭐
